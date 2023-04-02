@@ -1,4 +1,3 @@
-
 tables: sscrfields, zyblog.
 
 *tables: sscrfields.
@@ -193,6 +192,8 @@ DATA: IT_FILE1 TYPE STANDARD TABLE OF TY_FILE,
         go_parent_top       TYPE REF TO cl_gui_container,
         go_html_cntrl       TYPE REF TO cl_gui_html_viewer,
         go_grid             TYPE REF TO cl_gui_alv_grid.
+ 
+ CONSTANTS: co_top      TYPE char30        VALUE 'TOP_OF_PAGE'.
 
 ************************************************************************
 
@@ -267,76 +268,6 @@ CLASS lcl_alv_event_receiver DEFINITION.
     METHODS:
       handle_user_command FOR EVENT user_command OF cl_gui_alv_grid
         IMPORTING e_ucomm.
-ENDCLASS.
-
-CLASS lcl_alv_event_receiver IMPLEMENTATION.
-
- METHOD handle_user_command.
-
-
-    DATA: lv_answer       TYPE c,
-          lv_message_desc TYPE char100,
-          lt_changed_data TYPE TABLE OF ty_file.
-
-    CONSTANTS:co_1 TYPE c VALUE '1',
-              co_e TYPE c VALUE 'E'.
-
-  IF e_ucomm EQ '&EXEC'.
-      MESSAGE 'EXEC button is clicked.' TYPE 'S'.
-
-
-
-***************************************************************************************************
-CLEAR :WA_FILE1,IT_FILE1.
-
-  IT_FILE1[] = IT_FILE[].
-
-
- concatenate
-   'Vendor_code  ' 'bene_bnk_ name' 'BENEFICIARY_ACCOUNT_NO'
-   'BENEFICIARY_IFSC_CODE' 'BENEFICIARY_NAME '
-    'ZBENE_ADD_LINE_1 ''ZBENE_ADD_LINE_2  ''ZBENE_ADD_LINE_2 '
-    'ZBENE_ADD_LINE_4 ' 'AMOUNT  ''currency ''Beneficiary_zemailid '
-    'CONTACT_NO '
-
-  into ch_str3 separated by '|'.
- APPEND ch_str3 to it_pfile.
-
-
-LOOP AT IT_FILE1 INTO WA_FILE1.
-
-CONCATENATE 'P' wa_file1-zvendor_code  wa_file1-zbene_bnk_name wa_file1-zBENEFICIARY_ACCOUNT_NO WA_FILE1-ZBENEFICIARY_IFSC_CODE  WA_FILE1-zBENEFICIARY_NAME
-WA_FILE1-ZBENE_ADD_LINE_1   WA_FILE1-ZBENE_ADD_LINE_2  WA_FILE1-ZBENE_ADD_LINE_3  WA_FILE1-ZBENE_ADD_LINE_4  WA_FILE1-zAMOUNT WA_FILE1-zcurrency WA_FILE1-zemailid  WA_FILE1-zCONTACT_NO
-
-into ch_str3 SEPARATED BY '|'.
-
-append ch_str3 to it_pfile.
-
-ENDLOOP.
-
-SELECT SINGLE REMARKS FROM zicici_MAP INTO ZPAY_PATH WHERE KEYREF = 'PAY_FILE'.
-*SELECT SINGLE REMARKS FROM zicici_MAP INTO ZBACK_PATH WHERE KEYREF = 'BACK_FILE'.
-
-C_PFILE = ZPAY_PATH.
-*P_file = ZBACK_PATH.
-
-* C_PFILE = 'D:\usr\sap\Z07\DVEBMGS31\work\' .
-
-CONCATENATE zpay_path DEBIT_ACCNO '_' sy-datum+6(2) sy-datum+4(2) sy-datum(4) '_' '.txt' into zfilename.
-CONCATENATE C_PFILE ZFILENAME INTO C_PFILE.
-
- OPEN DATASET C_PFILE FOR OUTPUT IN TEXT MODE ENCODING DEFAULT .
-   DESCRIBE TABLE IT_PFILE LINES LV_LINES.
-
-   LOOP AT IT_PFILE.
-     IF SY-TABIX LE LV_LINES.
-        TRANSFER IT_PFILE TO C_PFILE.
-     ENDIF.
-   ENDLOOP.
-*   ENDCASE.
-   CLOSE DATASET C_PFILE.
-ENDIF.
-ENDMETHOD.
 ENDCLASS.
 
 
@@ -566,9 +497,9 @@ FORM GET_MISDATA.
     WRITE   'Duplicate Records'.
     endif.
     endloop.
-    
+
     PERFORM RECORDS_ALV.
-    
+
      CREATE OBJECT go_custom_container
     EXPORTING
       container_name = 'LT_FINAL'.
@@ -634,6 +565,14 @@ FORM GET_MISDATA.
     MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
                   WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
   ENDIF.
+    CALL METHOD go_dyndoc_id->initialize_document
+    EXPORTING
+      background_color = cl_dd_area=>col_textarea.
+* call top of page
+  CALL METHOD go_grid->list_processing_events
+    EXPORTING
+      i_event_name = co_top
+      i_dyndoc_id  = go_dyndoc_id.
     ENDFORM.
 
 
@@ -913,64 +852,134 @@ FORM PF_STATUS_SET USING rt_extab TYPE slis_t_extab.        "#EC CALLED
 
 ENDFORM.
 
-*FORM user_command USING r_ucomm    LIKE sy-ucomm
-*                       rs_selfield TYPE slis_selfield.
-*
-*
-*  IF r_ucomm EQ '&EXEC'.
-*
-*MESSAGE 'EXEC button is clicked.' TYPE 'S'.
-*
-*
-*
-****************************************************************************************************
-*CLEAR :WA_FILE1,IT_FILE1.
-*
-*  IT_FILE1[] = IT_FILE[].
-*
-*
-* concatenate
-*   'Vendor_code  ' 'bene_bnk_ name' 'BENEFICIARY_ACCOUNT_NO'
-*   'BENEFICIARY_IFSC_CODE' 'BENEFICIARY_NAME '
-*    'ZBENE_ADD_LINE_1 ''ZBENE_ADD_LINE_2  ''ZBENE_ADD_LINE_2 '
-*    'ZBENE_ADD_LINE_4 ' 'AMOUNT  ''currency ''Beneficiary_zemailid '
-*    'CONTACT_NO '
-*
-*  into ch_str3 separated by '|'.
-* APPEND ch_str3 to it_pfile.
-*
-*
-*LOOP AT IT_FILE1 INTO WA_FILE1.
-*
-*CONCATENATE 'P' wa_file1-zvendor_code  wa_file1-zbene_bnk_name wa_file1-zBENEFICIARY_ACCOUNT_NO WA_FILE1-ZBENEFICIARY_IFSC_CODE  WA_FILE1-zBENEFICIARY_NAME
-*WA_FILE1-ZBENE_ADD_LINE_1   WA_FILE1-ZBENE_ADD_LINE_2  WA_FILE1-ZBENE_ADD_LINE_3  WA_FILE1-ZBENE_ADD_LINE_4  WA_FILE1-zAMOUNT WA_FILE1-zcurrency WA_FILE1-zemailid  WA_FILE1-zCONTACT_NO
-*
-*into ch_str3 SEPARATED BY '|'.
-*
-*append ch_str3 to it_pfile.
-*
-*ENDLOOP.
-*
-*SELECT SINGLE REMARKS FROM zicici_MAP INTO ZPAY_PATH WHERE KEYREF = 'PAY_FILE'.
-**SELECT SINGLE REMARKS FROM zicici_MAP INTO ZBACK_PATH WHERE KEYREF = 'BACK_FILE'.
-*
-*C_PFILE = ZPAY_PATH.
-**P_file = ZBACK_PATH.
-*
-** C_PFILE = 'D:\usr\sap\Z07\DVEBMGS31\work\' .
-*
-*CONCATENATE zpay_path DEBIT_ACCNO '_' sy-datum+6(2) sy-datum+4(2) sy-datum(4) '_' '.txt' into zfilename.
-*CONCATENATE C_PFILE ZFILENAME INTO C_PFILE.
-*
-* OPEN DATASET C_PFILE FOR OUTPUT IN TEXT MODE ENCODING DEFAULT .
-*   DESCRIBE TABLE IT_PFILE LINES LV_LINES.
-*
-*   LOOP AT IT_PFILE.
-*     IF SY-TABIX LE LV_LINES.
-*        TRANSFER IT_PFILE TO C_PFILE.
-*     ENDIF.
-*   ENDLOOP.
-**   ENDCASE.
-*   CLOSE DATASET C_PFILE.
-*ENDIF.
-* ENDFORM.
+FORM user_command USING r_ucomm    LIKE sy-ucomm
+                       rs_selfield TYPE slis_selfield.
+
+
+  IF r_ucomm EQ '&EXEC'.
+
+MESSAGE 'EXEC button is clicked.' TYPE 'S'.
+
+
+
+***************************************************************************************************
+CLEAR :WA_FILE1,IT_FILE1.
+
+  IT_FILE1[] = IT_FILE[].
+
+
+ concatenate
+   'Vendor_code  ' 'bene_bnk_ name' 'BENEFICIARY_ACCOUNT_NO'
+   'BENEFICIARY_IFSC_CODE' 'BENEFICIARY_NAME '
+    'ZBENE_ADD_LINE_1 ''ZBENE_ADD_LINE_2  ''ZBENE_ADD_LINE_2 '
+    'ZBENE_ADD_LINE_4 ' 'AMOUNT  ''currency ''Beneficiary_zemailid '
+    'CONTACT_NO '
+
+  into ch_str3 separated by '|'.
+ APPEND ch_str3 to it_pfile.
+
+
+LOOP AT IT_FILE1 INTO WA_FILE1.
+
+CONCATENATE 'P' wa_file1-zvendor_code  wa_file1-zbene_bnk_name wa_file1-zBENEFICIARY_ACCOUNT_NO WA_FILE1-ZBENEFICIARY_IFSC_CODE  WA_FILE1-zBENEFICIARY_NAME
+WA_FILE1-ZBENE_ADD_LINE_1   WA_FILE1-ZBENE_ADD_LINE_2  WA_FILE1-ZBENE_ADD_LINE_3  WA_FILE1-ZBENE_ADD_LINE_4  WA_FILE1-zAMOUNT WA_FILE1-zcurrency WA_FILE1-zemailid  WA_FILE1-zCONTACT_NO
+
+into ch_str3 SEPARATED BY '|'.
+
+append ch_str3 to it_pfile.
+
+ENDLOOP.
+
+SELECT SINGLE REMARKS FROM zicici_MAP INTO ZPAY_PATH WHERE KEYREF = 'PAY_FILE'.
+*SELECT SINGLE REMARKS FROM zicici_MAP INTO ZBACK_PATH WHERE KEYREF = 'BACK_FILE'.
+
+C_PFILE = ZPAY_PATH.
+*P_file = ZBACK_PATH.
+
+* C_PFILE = 'D:\usr\sap\Z07\DVEBMGS31\work\' .
+
+CONCATENATE zpay_path DEBIT_ACCNO '_' sy-datum+6(2) sy-datum+4(2) sy-datum(4) '_' '.txt' into zfilename.
+CONCATENATE C_PFILE ZFILENAME INTO C_PFILE.
+
+ OPEN DATASET C_PFILE FOR OUTPUT IN TEXT MODE ENCODING DEFAULT .
+   DESCRIBE TABLE IT_PFILE LINES LV_LINES.
+
+   LOOP AT IT_PFILE.
+     IF SY-TABIX LE LV_LINES.
+        TRANSFER IT_PFILE TO C_PFILE.
+     ENDIF.
+   ENDLOOP.
+*   ENDCASE.
+   CLOSE DATASET C_PFILE.
+ENDIF.
+ ENDFORM.
+
+CLASS lcl_alv_event_receiver IMPLEMENTATION.
+
+ METHOD handle_user_command.
+
+
+    DATA: lv_answer       TYPE c,
+          lv_message_desc TYPE char100,
+          lt_changed_data TYPE TABLE OF ty_file.
+
+    CONSTANTS:co_1 TYPE c VALUE '1',
+              co_e TYPE c VALUE 'E'.
+
+  IF e_ucomm EQ '&EXEC'.
+      MESSAGE 'EXEC button is clicked.' TYPE 'S'.
+
+
+
+***************************************************************************************************
+CLEAR :WA_FILE1,IT_FILE1.
+
+  IT_FILE1[] = IT_FILE[].
+
+
+ concatenate
+   'Vendor_code  ' 'bene_bnk_ name' 'BENEFICIARY_ACCOUNT_NO'
+   'BENEFICIARY_IFSC_CODE' 'BENEFICIARY_NAME '
+    'ZBENE_ADD_LINE_1 ''ZBENE_ADD_LINE_2  ''ZBENE_ADD_LINE_2 '
+    'ZBENE_ADD_LINE_4 ' 'AMOUNT  ''currency ''Beneficiary_zemailid '
+    'CONTACT_NO '
+
+  into ch_str3 separated by '|'.
+ APPEND ch_str3 to it_pfile.
+
+
+LOOP AT IT_FILE1 INTO WA_FILE1.
+
+CONCATENATE 'P' wa_file1-zvendor_code  wa_file1-zbene_bnk_name wa_file1-zBENEFICIARY_ACCOUNT_NO WA_FILE1-ZBENEFICIARY_IFSC_CODE  WA_FILE1-zBENEFICIARY_NAME
+WA_FILE1-ZBENE_ADD_LINE_1   WA_FILE1-ZBENE_ADD_LINE_2  WA_FILE1-ZBENE_ADD_LINE_3  WA_FILE1-ZBENE_ADD_LINE_4  WA_FILE1-zAMOUNT WA_FILE1-zcurrency WA_FILE1-zemailid  WA_FILE1-zCONTACT_NO
+
+into ch_str3 SEPARATED BY '|'.
+
+append ch_str3 to it_pfile.
+
+ENDLOOP.
+
+SELECT SINGLE REMARKS FROM zicici_MAP INTO ZPAY_PATH WHERE KEYREF = 'PAY_FILE'.
+*SELECT SINGLE REMARKS FROM zicici_MAP INTO ZBACK_PATH WHERE KEYREF = 'BACK_FILE'.
+
+C_PFILE = ZPAY_PATH.
+*P_file = ZBACK_PATH.
+
+* C_PFILE = 'D:\usr\sap\Z07\DVEBMGS31\work\' .
+
+CONCATENATE zpay_path DEBIT_ACCNO '_' sy-datum+6(2) sy-datum+4(2) sy-datum(4) '_' '.txt' into zfilename.
+CONCATENATE C_PFILE ZFILENAME INTO C_PFILE.
+
+ OPEN DATASET C_PFILE FOR OUTPUT IN TEXT MODE ENCODING DEFAULT .
+   DESCRIBE TABLE IT_PFILE LINES LV_LINES.
+
+   LOOP AT IT_PFILE assigning FIELD-SYMBOL(<fs_pfile>).
+     IF SY-TABIX LE LV_LINES.
+        TRANSFER IT_PFILE TO C_PFILE.
+     ENDIF.
+   ENDLOOP.
+*   ENDCASE.
+   CLOSE DATASET C_PFILE.
+ENDIF.
+ENDMETHOD.
+ENDCLASS.
