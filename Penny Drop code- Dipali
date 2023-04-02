@@ -1,13 +1,3 @@
-*&---------------------------------------------------------------------*
-*& Report  ZPENNYDROP01
-*&
-*&---------------------------------------------------------------------*
-*& CHANGED BY DEEPALI LATAM
-*&
-*&---------------------------------------------------------------------*
-
-REPORT ZPENNYDROP01.
-
 
 tables: sscrfields, zyblog.
 
@@ -84,6 +74,7 @@ types : begin of ty_adr6,
         end of ty_adr6.
 
  TYPES :BEGIN OF TY_FILE,
+       CHECK                   TYPE C,
        ZBENEFICIARY_IFSC_CODE  TYPE STRING,
        ZBENEFICIARY_ACCOUNT_NO TYPE STRING,
        zbene_bnk_name          TYPE STRING,
@@ -97,8 +88,6 @@ types : begin of ty_adr6,
        zcurrency               TYPE string,
        zemailid                TYPE string,
        ZCONTACT_NO             TYPE string,
-        CHECK                   TYPE C,
-
        END OF TY_FILE.
 
 type-pools: slis,VRM.
@@ -173,9 +162,12 @@ TYPES: BEGIN OF ty_alv_display,
         lt_event   type slis_t_event.
 
 
-DATA: wa_fit    TYPE slis_fieldcat_alv,
-      it_fit    TYPE slis_t_fieldcat_alv,
-      wa_layout TYPE slis_layout_alv,
+*DATA: wa_fit    TYPE slis_fieldcat_alv,
+DATA: wa_fit    TYPE LVC_S_FCAT,
+*      it_fit    TYPE slis_t_fieldcat_alv,
+      it_fit    TYPE LVC_T_FCAT,
+*      wa_layout TYPE slis_layout_alv,
+      wa_layout TYPE lvc_s_layo,
       wa_top    TYPE slis_listheader,
       it_top    TYPE slis_t_listheader.
 
@@ -193,6 +185,14 @@ DATA: IT_FILE TYPE STANDARD TABLE OF TY_FILE,
 DATA: IT_FILE1 TYPE STANDARD TABLE OF TY_FILE,
       WA_FILE1 TYPE TY_FILE.
  DATA:IT_PFILE TYPE TABLE OF  STRING WITH HEADER LINE.
+
+ DATA:         go_custom_container TYPE REF TO cl_gui_custom_container,
+        go_dyndoc_id        TYPE REF TO cl_dd_document,
+        go_splitter         TYPE REF TO cl_gui_splitter_container,
+        go_parent_grid      TYPE REF TO cl_gui_container,
+        go_parent_top       TYPE REF TO cl_gui_container,
+        go_html_cntrl       TYPE REF TO cl_gui_html_viewer,
+        go_grid             TYPE REF TO cl_gui_alv_grid.
 
 ************************************************************************
 
@@ -260,6 +260,86 @@ DATA: it_listheader TYPE slis_t_listheader,
       wa_listheader TYPE slis_listheader.
 
 **************************************************************************************************************
+
+CLASS lcl_alv_event_receiver DEFINITION.
+
+  PUBLIC SECTION.
+    METHODS:
+      handle_user_command FOR EVENT user_command OF cl_gui_alv_grid
+        IMPORTING e_ucomm.
+ENDCLASS.
+
+CLASS lcl_alv_event_receiver IMPLEMENTATION.
+
+ METHOD handle_user_command.
+
+
+    DATA: lv_answer       TYPE c,
+          lv_message_desc TYPE char100,
+          lt_changed_data TYPE TABLE OF ty_file.
+
+    CONSTANTS:co_1 TYPE c VALUE '1',
+              co_e TYPE c VALUE 'E'.
+
+  IF e_ucomm EQ '&EXEC'.
+      MESSAGE 'EXEC button is clicked.' TYPE 'S'.
+
+
+
+***************************************************************************************************
+CLEAR :WA_FILE1,IT_FILE1.
+
+  IT_FILE1[] = IT_FILE[].
+
+
+ concatenate
+   'Vendor_code  ' 'bene_bnk_ name' 'BENEFICIARY_ACCOUNT_NO'
+   'BENEFICIARY_IFSC_CODE' 'BENEFICIARY_NAME '
+    'ZBENE_ADD_LINE_1 ''ZBENE_ADD_LINE_2  ''ZBENE_ADD_LINE_2 '
+    'ZBENE_ADD_LINE_4 ' 'AMOUNT  ''currency ''Beneficiary_zemailid '
+    'CONTACT_NO '
+
+  into ch_str3 separated by '|'.
+ APPEND ch_str3 to it_pfile.
+
+
+LOOP AT IT_FILE1 INTO WA_FILE1.
+
+CONCATENATE 'P' wa_file1-zvendor_code  wa_file1-zbene_bnk_name wa_file1-zBENEFICIARY_ACCOUNT_NO WA_FILE1-ZBENEFICIARY_IFSC_CODE  WA_FILE1-zBENEFICIARY_NAME
+WA_FILE1-ZBENE_ADD_LINE_1   WA_FILE1-ZBENE_ADD_LINE_2  WA_FILE1-ZBENE_ADD_LINE_3  WA_FILE1-ZBENE_ADD_LINE_4  WA_FILE1-zAMOUNT WA_FILE1-zcurrency WA_FILE1-zemailid  WA_FILE1-zCONTACT_NO
+
+into ch_str3 SEPARATED BY '|'.
+
+append ch_str3 to it_pfile.
+
+ENDLOOP.
+
+SELECT SINGLE REMARKS FROM zicici_MAP INTO ZPAY_PATH WHERE KEYREF = 'PAY_FILE'.
+*SELECT SINGLE REMARKS FROM zicici_MAP INTO ZBACK_PATH WHERE KEYREF = 'BACK_FILE'.
+
+C_PFILE = ZPAY_PATH.
+*P_file = ZBACK_PATH.
+
+* C_PFILE = 'D:\usr\sap\Z07\DVEBMGS31\work\' .
+
+CONCATENATE zpay_path DEBIT_ACCNO '_' sy-datum+6(2) sy-datum+4(2) sy-datum(4) '_' '.txt' into zfilename.
+CONCATENATE C_PFILE ZFILENAME INTO C_PFILE.
+
+ OPEN DATASET C_PFILE FOR OUTPUT IN TEXT MODE ENCODING DEFAULT .
+   DESCRIBE TABLE IT_PFILE LINES LV_LINES.
+
+   LOOP AT IT_PFILE.
+     IF SY-TABIX LE LV_LINES.
+        TRANSFER IT_PFILE TO C_PFILE.
+     ENDIF.
+   ENDLOOP.
+*   ENDCASE.
+   CLOSE DATASET C_PFILE.
+ENDIF.
+ENDMETHOD.
+ENDCLASS.
+
+
 
 SELECTION-SCREEN  BEGIN OF BLOCK B0 WITH FRAME.
 
@@ -486,7 +566,74 @@ FORM GET_MISDATA.
     WRITE   'Duplicate Records'.
     endif.
     endloop.
+    
     PERFORM RECORDS_ALV.
+    
+     CREATE OBJECT go_custom_container
+    EXPORTING
+      container_name = 'LT_FINAL'.
+
+*   * Create TOP-of page
+  CREATE OBJECT go_dyndoc_id
+    EXPORTING
+      style = 'ALV_GRID'.
+
+*  * Create Splitter for grid
+  CREATE OBJECT go_splitter
+    EXPORTING
+      parent  = go_custom_container
+      rows    = 2
+      columns = 1.
+
+  CALL METHOD go_splitter->get_container
+    EXPORTING
+      row       = 1
+      column    = 1
+    RECEIVING
+      container = go_parent_top.
+
+  CALL METHOD go_splitter->get_container
+    EXPORTING
+      row       = 2
+      column    = 1
+    RECEIVING
+      container = go_parent_grid.
+
+* set height of the container , top of page height
+  CALL METHOD go_splitter->set_row_height
+    EXPORTING
+      id     = 1
+      height = 15.
+
+  IF go_grid IS INITIAL.
+    CREATE OBJECT go_grid
+      EXPORTING
+        i_parent = go_parent_grid.
+  ENDIF.
+
+* set event handlers
+  DATA: lo_handler  TYPE REF TO lcl_alv_event_receiver.
+  IF lo_handler IS INITIAL.
+    CREATE OBJECT lo_handler.
+    SET HANDLER lo_handler->handle_user_command FOR go_grid.
+  ENDIF.
+
+  CALL METHOD go_grid->set_table_for_first_display
+    EXPORTING
+      is_layout                     = wa_layout
+    CHANGING
+      it_outtab                     = IT_FILE
+      it_fieldcatalog               = IT_FIT
+    EXCEPTIONS
+      invalid_parameter_combination = 1
+      program_error                 = 2
+      too_many_lines                = 3.
+
+
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+                  WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
     ENDFORM.
 
 
@@ -541,8 +688,9 @@ DATA: lv_col TYPE i VALUE 0.
     wa_fit-col_pos   = '1'.
     wa_fit-fieldname = 'flag'.
     wa_fit-tabname   = 'it_file'.
-    wa_fit-seltext_l = 'check'.
-     wa_fit-input  = 'X'.
+    wa_fit-seltext = 'check'.
+*     wa_fit-input  = 'X'.
+     wa_fit-EDIT_MASK  = 'X'.
      wa_fit-edit  =  'X'.
      WA_FIT-CHECKBOX = 'X'.
     wa_fit-outputlen = '30'.
@@ -552,42 +700,42 @@ DATA: lv_col TYPE i VALUE 0.
     wa_fit-col_pos   = '2'.
     wa_fit-fieldname = 'ZBENEFICIARY_IFSC_CODE'.
     wa_fit-tabname   = 'it_FILE'.
-    wa_fit-seltext_l = 'IFSC CODE'.
+    wa_fit-seltext = 'IFSC CODE'.
     APPEND wa_fit TO it_fit.
     CLEAR wa_fit.
 
     wa_fit-col_pos   = '3'.
     wa_fit-fieldname = 'ZBENEFICIARY_ACCOUNT_NO'.
     wa_fit-tabname   = 'it_FILE'.
-    wa_fit-seltext_l = 'CREDIT ACCOUNT NUMBER'.
+    wa_fit-seltext = 'CREDIT ACCOUNT NUMBER'.
     APPEND wa_fit TO it_fit.
     CLEAR wa_fit.
 
     wa_fit-col_pos   = '4'.
     wa_fit-fieldname = 'zbene_bnk_name '.
     wa_fit-tabname   = 'it_FILE'.
-    wa_fit-seltext_l = 'BANK NAME'.
+    wa_fit-seltext = 'BANK NAME'.
     APPEND wa_fit TO it_fit.
     CLEAR wa_fit.
 
     wa_fit-col_pos   = '5'.
     wa_fit-fieldname = 'zvendor_code'.
     wa_fit-tabname   = 'it_FILE'.
-    wa_fit-seltext_l = 'VENDOR CODE'.
+    wa_fit-seltext = 'VENDOR CODE'.
     APPEND wa_fit TO it_fit.
     CLEAR wa_fit.
 
     wa_fit-col_pos   = '6'.
     wa_fit-fieldname = 'ZBENEFICIARY_NAME '.
     wa_fit-tabname   = 'it_FILE'.
-    wa_fit-seltext_l = 'VENDOR NAME'.
+    wa_fit-seltext = 'VENDOR NAME'.
     APPEND wa_fit TO it_fit.
     CLEAR wa_fit.
 
     wa_fit-col_pos   = '7'.
     wa_fit-fieldname = 'ZBENE_ADD_LINE_1 '.
     wa_fit-tabname   = 'it_FILE'.
-    wa_fit-seltext_l = 'ADDRESS1'.
+    wa_fit-seltext = 'ADDRESS1'.
     wa_fit-outputlen = '30'.
     APPEND wa_fit TO it_fit.
     CLEAR wa_fit.
@@ -595,28 +743,28 @@ DATA: lv_col TYPE i VALUE 0.
     wa_fit-col_pos   = '8'.
     wa_fit-fieldname = 'ZBENE_ADD_LINE_2 '.
     wa_fit-tabname   = 'it_FILE'.
-    wa_fit-seltext_l = 'ADDRESS2'.
+    wa_fit-seltext = 'ADDRESS2'.
     APPEND wa_fit TO it_fit.
     CLEAR wa_fit.
 
     wa_fit-col_pos   = '9'.
     wa_fit-fieldname = 'ZBENE_ADD_LINE_3  '.
     wa_fit-tabname   = 'it_FILE'.
-    wa_fit-seltext_l = 'ADDRESS3'.
+    wa_fit-seltext = 'ADDRESS3'.
     APPEND wa_fit TO it_fit.
     CLEAR wa_fit.
 
     wa_fit-col_pos   = '10'.
     wa_fit-fieldname = 'ZBENE_ADD_LINE_4 '.
     wa_fit-tabname   = 'it_FILE'.
-    wa_fit-seltext_l = 'ADDRESS4'.
+    wa_fit-seltext = 'ADDRESS4'.
     APPEND wa_fit TO it_fit.
     CLEAR wa_fit.
 
     wa_fit-col_pos   = '11'.
     wa_fit-fieldname = 'ZAMOUNT '.
     wa_fit-tabname   = 'it_FILE'.
-    wa_fit-seltext_l = 'AMOUNT'.
+    wa_fit-seltext = 'AMOUNT'.
     wa_fit-do_sum    =   ' X '   .
     APPEND wa_fit TO it_fit.
     CLEAR wa_fit.
@@ -625,21 +773,21 @@ DATA: lv_col TYPE i VALUE 0.
     wa_fit-col_pos   = '12'.
     wa_fit-fieldname = 'zcurrency '.
     wa_fit-tabname   = 'it_FILE'.
-    wa_fit-seltext_l = 'CURRENCY'.
+    wa_fit-seltext = 'CURRENCY'.
     APPEND wa_fit TO it_fit.
     CLEAR wa_fit.
 
     wa_fit-col_pos   = '13'.
     wa_fit-fieldname = 'zemailid '.
     wa_fit-tabname   = 'it_FILE'.
-    wa_fit-seltext_l = 'EMAIL ID'.
+    wa_fit-seltext = 'EMAIL ID'.
     APPEND wa_fit TO it_fit.
     CLEAR wa_fit.
 
     wa_fit-col_pos   = '14'.
     wa_fit-fieldname = 'ZCONTACT_NO'.
     wa_fit-tabname   = 'it_icici'.
-    wa_fit-seltext_l = 'CONTACTNO'.
+    wa_fit-seltext = 'CONTACTNO'.
     APPEND wa_fit TO it_fit.
     CLEAR wa_fit.
   gd_layout-colwidth_optimize = 'X'.
@@ -658,7 +806,8 @@ ENDFORM.
 FORM alv_layout .
 
   wa_layout-zebra = 'X'.
-  wa_layout-colwidth_optimize = 'X'.
+  wa_layout-cwidth_opt = 'X'.
+  wa_layout-no_rowmark = 'X'.
 
 ENDFORM.
 
@@ -701,6 +850,8 @@ CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
 *    I_LOGO                  =
 *   I_END_OF_LIST_GRID       =
     I_ALV_FORM               = 'X' .
+
+
 ENDFORM.
 
 **&---------------------------------------------------------------------*
@@ -715,23 +866,43 @@ ENDFORM.
  FORM DISPLAY_DATA.
 
 
-  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
-   EXPORTING
+*  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+*   EXPORTING
+*
+*    I_CALLBACK_PROGRAM                = sy-repid
+*   I_CALLBACK_PF_STATUS_SET          = 'PF_STATUS_SET'
+*   I_CALLBACK_USER_COMMAND           = 'USER_COMMAND '
+*    I_CALLBACK_TOP_OF_PAGE            ='TOP_OF_LOG'
+*   I_GRID_TITLE                      = 'LIST OF VENDORS FOR PENDROP '
+*
+*    IS_LAYOUT                         = wa_layout
+*    IT_FIELDCAT                       = it_fit
+*
+*   TABLES
+*    T_OUTTAB                          = it_FILE
+*  EXCEPTIONS
+*   PROGRAM_ERROR                     = 1
+*   OTHERS                            = 2 .
 
-    I_CALLBACK_PROGRAM                = sy-repid
-   I_CALLBACK_PF_STATUS_SET          = 'PF_STATUS_SET'
-   I_CALLBACK_USER_COMMAND           = 'USER_COMMAND '
-    I_CALLBACK_TOP_OF_PAGE            ='TOP_OF_LOG'
-   I_GRID_TITLE                      = 'LIST OF VENDORS FOR PENDROP '
+*  *  * Creating html control
+  IF go_html_cntrl IS INITIAL.
+    CREATE OBJECT go_html_cntrl
+      EXPORTING
+        parent = go_parent_top.
+  ENDIF.
+  CALL METHOD go_dyndoc_id->merge_document.
+  go_dyndoc_id->html_control = go_html_cntrl.
 
-    IS_LAYOUT                         = wa_layout
-    IT_FIELDCAT                       = it_fit
-
-   TABLES
-    T_OUTTAB                          = it_FILE
-  EXCEPTIONS
-   PROGRAM_ERROR                     = 1
-   OTHERS                            = 2 .
+** Display document
+  CALL METHOD go_dyndoc_id->display_document
+    EXPORTING
+      reuse_control      = abap_true
+      parent             = go_parent_top
+    EXCEPTIONS
+      html_display_error = 1.
+  IF sy-subrc <> 0.
+    MESSAGE 'Error in displaying top-of-page' TYPE 'E'.
+  ENDIF.
 
 ENDFORM.
 
@@ -742,65 +913,64 @@ FORM PF_STATUS_SET USING rt_extab TYPE slis_t_extab.        "#EC CALLED
 
 ENDFORM.
 
-FORM user_command USING r_ucomm    LIKE sy-ucomm
-                       rs_selfield TYPE slis_selfield.
-
-
-  IF r_ucomm EQ '&EXEC'.
-
-MESSAGE 'EXEC button is clicked.' TYPE 'S'.
-
-
-
-***************************************************************************************************
-CLEAR :WA_FILE1,IT_FILE1.
-
-  IT_FILE1[] = IT_FILE[].
-
-
-
- concatenate
-   'Vendor_code  ' 'bene_bnk_ name' 'BENEFICIARY_ACCOUNT_NO'
-   'BENEFICIARY_IFSC_CODE' 'BENEFICIARY_NAME '
-    'ZBENE_ADD_LINE_1 ''ZBENE_ADD_LINE_2  ''ZBENE_ADD_LINE_2 '
-    'ZBENE_ADD_LINE_4 ' 'AMOUNT  ''currency ''Beneficiary_zemailid '
-    'CONTACT_NO '
-
-  into ch_str3 separated by '|'.
- APPEND ch_str3 to it_pfile.
-
-
-LOOP AT IT_FILE1 INTO WA_FILE1.
-
-CONCATENATE 'P' wa_file1-zvendor_code  wa_file1-zbene_bnk_name wa_file1-zBENEFICIARY_ACCOUNT_NO WA_FILE1-ZBENEFICIARY_IFSC_CODE  WA_FILE1-zBENEFICIARY_NAME
-WA_FILE1-ZBENE_ADD_LINE_1   WA_FILE1-ZBENE_ADD_LINE_2  WA_FILE1-ZBENE_ADD_LINE_3  WA_FILE1-ZBENE_ADD_LINE_4  WA_FILE1-zAMOUNT WA_FILE1-zcurrency WA_FILE1-zemailid  WA_FILE1-zCONTACT_NO
-
-into ch_str3 SEPARATED BY '|'.
-
-append ch_str3 to it_pfile.
-
-ENDLOOP.
-
-SELECT SINGLE REMARKS FROM zicici_MAP INTO ZPAY_PATH WHERE KEYREF = 'PAY_FILE'.
-*SELECT SINGLE REMARKS FROM zicici_MAP INTO ZBACK_PATH WHERE KEYREF = 'BACK_FILE'.
-
-C_PFILE = ZPAY_PATH.
-*P_file = ZBACK_PATH.
-
- C_PFILE = 'D:\usr\sap\Z07\DVEBMGS31\work\' .
-
-CONCATENATE zpay_path DEBIT_ACCNO '_' sy-datum+6(2) sy-datum+4(2) sy-datum(4) '_' '.txt' into zfilename.
-CONCATENATE C_PFILE ZFILENAME INTO C_PFILE.
-
- OPEN DATASET C_PFILE FOR OUTPUT IN TEXT MODE ENCODING DEFAULT .
-   DESCRIBE TABLE IT_PFILE LINES LV_LINES.
-
-   LOOP AT IT_PFILE.
-     IF SY-TABIX LE LV_LINES.
-        TRANSFER IT_PFILE TO C_PFILE.
-     ENDIF.
-   ENDLOOP.
-*   ENDCASE.
-   CLOSE DATASET C_PFILE.
-ENDIF.
- ENDFORM.
+*FORM user_command USING r_ucomm    LIKE sy-ucomm
+*                       rs_selfield TYPE slis_selfield.
+*
+*
+*  IF r_ucomm EQ '&EXEC'.
+*
+*MESSAGE 'EXEC button is clicked.' TYPE 'S'.
+*
+*
+*
+****************************************************************************************************
+*CLEAR :WA_FILE1,IT_FILE1.
+*
+*  IT_FILE1[] = IT_FILE[].
+*
+*
+* concatenate
+*   'Vendor_code  ' 'bene_bnk_ name' 'BENEFICIARY_ACCOUNT_NO'
+*   'BENEFICIARY_IFSC_CODE' 'BENEFICIARY_NAME '
+*    'ZBENE_ADD_LINE_1 ''ZBENE_ADD_LINE_2  ''ZBENE_ADD_LINE_2 '
+*    'ZBENE_ADD_LINE_4 ' 'AMOUNT  ''currency ''Beneficiary_zemailid '
+*    'CONTACT_NO '
+*
+*  into ch_str3 separated by '|'.
+* APPEND ch_str3 to it_pfile.
+*
+*
+*LOOP AT IT_FILE1 INTO WA_FILE1.
+*
+*CONCATENATE 'P' wa_file1-zvendor_code  wa_file1-zbene_bnk_name wa_file1-zBENEFICIARY_ACCOUNT_NO WA_FILE1-ZBENEFICIARY_IFSC_CODE  WA_FILE1-zBENEFICIARY_NAME
+*WA_FILE1-ZBENE_ADD_LINE_1   WA_FILE1-ZBENE_ADD_LINE_2  WA_FILE1-ZBENE_ADD_LINE_3  WA_FILE1-ZBENE_ADD_LINE_4  WA_FILE1-zAMOUNT WA_FILE1-zcurrency WA_FILE1-zemailid  WA_FILE1-zCONTACT_NO
+*
+*into ch_str3 SEPARATED BY '|'.
+*
+*append ch_str3 to it_pfile.
+*
+*ENDLOOP.
+*
+*SELECT SINGLE REMARKS FROM zicici_MAP INTO ZPAY_PATH WHERE KEYREF = 'PAY_FILE'.
+**SELECT SINGLE REMARKS FROM zicici_MAP INTO ZBACK_PATH WHERE KEYREF = 'BACK_FILE'.
+*
+*C_PFILE = ZPAY_PATH.
+**P_file = ZBACK_PATH.
+*
+** C_PFILE = 'D:\usr\sap\Z07\DVEBMGS31\work\' .
+*
+*CONCATENATE zpay_path DEBIT_ACCNO '_' sy-datum+6(2) sy-datum+4(2) sy-datum(4) '_' '.txt' into zfilename.
+*CONCATENATE C_PFILE ZFILENAME INTO C_PFILE.
+*
+* OPEN DATASET C_PFILE FOR OUTPUT IN TEXT MODE ENCODING DEFAULT .
+*   DESCRIBE TABLE IT_PFILE LINES LV_LINES.
+*
+*   LOOP AT IT_PFILE.
+*     IF SY-TABIX LE LV_LINES.
+*        TRANSFER IT_PFILE TO C_PFILE.
+*     ENDIF.
+*   ENDLOOP.
+**   ENDCASE.
+*   CLOSE DATASET C_PFILE.
+*ENDIF.
+* ENDFORM.
