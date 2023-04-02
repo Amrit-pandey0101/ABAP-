@@ -1,0 +1,806 @@
+*&---------------------------------------------------------------------*
+*& Report  ZPENNYDROP01
+*&
+*&---------------------------------------------------------------------*
+*& CHANGED BY DEEPALI LATAM
+*&
+*&---------------------------------------------------------------------*
+
+REPORT ZPENNYDROP01.
+
+
+tables: sscrfields, zyblog.
+
+*tables: sscrfields.
+
+data: it_layout type slis_layout_alv.
+
+
+types : begin of ty_bnka,
+          banks type bnka-banks,
+          bankl type bnka-bankl,
+          banka type bnka-banka,
+          stras type bnka-stras,
+          ort01 type bnka-ort01,
+          swift type bnka-swift,
+          bnklz type bnka-bnklz,
+          brnch type bnka-brnch,
+        end of ty_bnka.
+
+ types : begin of ty_lfa1,
+          lifnr type lfa1-lifnr,
+          land1 type lfa1-land1,
+          name1 type lfa1-name1,
+          name2 type lfa1-name2,
+          ort01 type lfa1-ort01,
+          ort02 type lfa1-ort02,
+          pstlz type lfa1-pstlz,
+          stras type lfa1-stras,
+          adrnr type lfa1-adrnr,
+          mcod3 type lfa1-mcod3,
+          dtaws type lfa1-dtaws,
+          lnrza type lfa1-lnrza,
+        end of ty_lfa1.
+
+ types : begin of ty_lfbk,
+          lifnr type lfbk-lifnr,
+          banks type lfbk-banks,
+          bankl type lfbk-bankl,
+          bankn type lfbk-bankn,
+          bkont type lfbk-bkont,
+          bvtyp type lfbk-bvtyp,
+          bkref type lfbk-bkref,
+          koinh type lfbk-koinh,
+        end of ty_lfbk.
+
+ TYPES : BEGIN OF ty_lfb1,
+        lifnr TYPE lfb1-lifnr,
+        bukrs TYPE lfb1-bukrs,
+        intad TYPE lfb1-intad,
+        ERDAT type lfb1-erdat,
+        END OF ty_lfb1.
+
+ types : begin of ty_adrc,
+          addrnumber type adrc-addrnumber,
+          city1 type adrc-city1,
+          city2 type adrc-city2,
+          post_code1 type adrc-post_code1,
+          street type adrc-street,
+          house_num1 type adrc-house_num1,
+          str_suppl1 type adrc-str_suppl1,
+          str_suppl2 type adrc-str_suppl2,
+          str_suppl3 type adrc-str_suppl3,
+          location type adrc-location,
+          country type adrc-country,
+          region type adrc-region,
+          tel_number type adrc-tel_number,
+        end of ty_adrc.
+
+types : begin of ty_adr6,
+          addrnumber type adr6-addrnumber,
+          flgdefault type adr6-flgdefault,
+          home_flag  type adr6-home_flag,
+          smtp_addr  type adr6-smtp_addr,
+        end of ty_adr6.
+
+ TYPES :BEGIN OF TY_FILE,
+       ZBENEFICIARY_IFSC_CODE  TYPE STRING,
+       ZBENEFICIARY_ACCOUNT_NO TYPE STRING,
+       zbene_bnk_name          TYPE STRING,
+       zvendor_code            TYPE STRING,
+       ZBENEFICIARY_NAME       TYPE STRING,
+       ZBENE_ADD_LINE_1        TYPE STRING,
+       ZBENE_ADD_LINE_2        TYPE STRING,
+       ZBENE_ADD_LINE_3        TYPE STRING,
+       ZBENE_ADD_LINE_4        TYPE STRING,
+       ZAMOUNT                 TYPE STRING,
+       zcurrency               TYPE string,
+       zemailid                TYPE string,
+       ZCONTACT_NO             TYPE string,
+        CHECK                   TYPE C,
+
+       END OF TY_FILE.
+
+type-pools: slis,VRM.
+
+TYPES: BEGIN OF ty_alv_display,
+         status(12)             TYPE c,
+*         CHECKBOX               type c,
+         remarks(100)           TYPE c,
+         lifnr                  LIKE bseg-lifnr,
+         kunnr                  LIKE bseg-kunnr,
+         belnr                  LIKE bseg-belnr,
+         transaction_ref_no(15) TYPE c,
+*         rwbtr                  LIKE bseg-dmbtr,
+         vend_name(140)         TYPE c,
+         vend_code              TYPE lifnr,
+*         line_color(4)          TYPE c,
+         pay_type(10)           TYPE c,
+         no_of_invoices         TYPE i,
+         pay_loc(35)            TYPE c,
+         print_loc(35)          TYPE c,
+         fis_yr                 LIKE bseg-gjahr,
+         err_type               TYPE i,
+         chk_num                TYPE payr-chect,
+         debit_acc(30)          TYPE c,
+         val_date               TYPE sy-datum,
+         bene_add1(50)          TYPE c,
+         bene_add2(50)          TYPE c,
+         bene_acc(30)           TYPE c,
+         bene_ifsc(11)          TYPE c,
+         pin_code(10)           TYPE c,
+  SEL,
+       END OF ty_alv_display.
+
+ DATA: RS_SELFIRLD TYPE SLIS_SELFIELD.
+
+ DATA:  it_lfb1      type table of ty_lfb1,
+        x_lfb1       type ty_lfb1,
+
+        it_bnka      type table of ty_bnka,
+        x_bnka       type ty_bnka,
+
+       it_laufk     type table of  ilaufk,
+       x_laufk      type ilaufk,
+
+       it_lfa1      type table of ty_lfa1,
+       x_lfa1       type ty_lfa1,
+
+       it_lfbk      type table of ty_lfbk,
+       x_lfbk       type ty_lfbk,
+
+       it_adrc      type table of ty_adrc,
+       x_adrc       type ty_adrc,
+
+        it_adr6      type table of ty_adr6,
+        x_adr6       type ty_adr6,
+        x_adr6_email type ty_adr6,
+
+
+*        it_YESBANKmap type standard table of zyBMAP,
+*        wa_YESBANKmap type zybMAP,
+
+
+*         it_ICICIMAP type standard table of zicici_MAP,
+*         wa_ICICIMAP type zicici_MAP,
+
+
+
+*        it_BANKlog type standard table of zyblog,
+*        wa_BANKlog type zyblog,
+
+      ls_event   type slis_alv_event,
+        lt_event   type slis_t_event.
+
+
+DATA: wa_fit    TYPE slis_fieldcat_alv,
+      it_fit    TYPE slis_t_fieldcat_alv,
+      wa_layout TYPE slis_layout_alv,
+      wa_top    TYPE slis_listheader,
+      it_top    TYPE slis_t_listheader.
+
+DATA : V_NOENTRIES,GV_ALREADY_EX.
+
+DATA: DEBIT_ACCNO TYPE string VALUE '123409281882',
+       gv_bukrs   type bukrs,
+       GV_LIFNR   TYPE LIFNR,
+       gv_periv   type t001-periv.
+
+
+DATA: IT_FILE TYPE STANDARD TABLE OF TY_FILE,
+      WA_FILE TYPE TY_FILE.
+
+DATA: IT_FILE1 TYPE STANDARD TABLE OF TY_FILE,
+      WA_FILE1 TYPE TY_FILE.
+ DATA:IT_PFILE TYPE TABLE OF  STRING WITH HEADER LINE.
+
+************************************************************************
+
+TYPES: BEGIN OF t_idno,
+         idno(1200) TYPE c,
+       END OF t_idno.
+
+DATA: lt_idno TYPE TABLE OF t_idno,
+      ls_idno LIKE LINE OF lt_idno.
+
+TYPES: BEGIN OF t_idno1,
+         idno1(1200) TYPE c,
+       END OF t_idno1.
+
+DATA: lt_idno1 TYPE TABLE OF t_idno1,
+      ls_idno1 LIKE LINE OF lt_idno1.
+
+
+DATA :    lv_lines TYPE i.
+
+**************************************************************************
+
+
+DATA:lfname(150)       TYPE c,
+      lfname2(50)       TYPE c.
+
+
+DATA : c_pfile(300)   TYPE  c  ,
+       backup_file(300) type c.
+
+DATA :p_file(150) TYPE c.
+DATA :a_file(150) TYPE c.
+DATA zback_path type c.
+DATA zpay_path type c.
+
+ DATA:  CH_STR3      TYPE STRING,
+       LV_PAYLOAD   TYPE STRING,
+       ZFILENAME(50) TYPE C.
+*******************************************************************************************
+
+*DATA : gv_x(1)   TYPE c.
+*
+** Internal table and workarea declarations for tstc
+*DATA: it_alv_display TYPE STANDARD TABLE OF ty_alv_display WITH HEADER LINE,
+*      wa_alv_display TYPE ty_alv_display.
+*
+*DATA : checkbox type char1.
+******************************************************************************
+
+DATA:  gd_layout TYPE slis_layout_alv,
+         gd_repid  LIKE sy-repid,
+         g_variant TYPE disvariant.
+
+ TYPES:
+    t_fieldcat TYPE slis_fieldcat_alv.
+
+DATA:
+    i_fieldcat TYPE STANDARD TABLE OF t_fieldcat.
+
+
+DATA : DO_SUM TYPE C.
+DATA it_sflight.
+***************************************************************************************
+DATA: it_listheader TYPE slis_t_listheader,
+      wa_listheader TYPE slis_listheader.
+
+**************************************************************************************************************
+
+SELECTION-SCREEN  BEGIN OF BLOCK B0 WITH FRAME.
+
+PARAMETERS: P_ZBUKR TYPE LFB1-BUKRS MEMORY ID BUK OBLIGATORY ,
+            P_LIFNR TYPE LFB1-LIFNR MEMORY ID LIF OBLIGATORY.
+
+SELECT-OPTIONS: S_ERDAT FOR  X_LFB1-ERDAT OBLIGATORY MODIF ID AUT.
+
+SELECTION-SCREEN END OF BLOCK B0.
+
+
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-002.
+PARAMETERS:ICICI RADIOBUTTON GROUP r1 DEFAULT 'X',
+           KOTAK RADIOBUTTON GROUP r1.
+SELECTION-SCREEN:END OF BLOCK b1.
+
+SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN PUSHBUTTON (20) W_BUTTON USER-COMMAND BUT1.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN SKIP.
+*----------------------------------------------------------------------
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR S_ERDAT-LOW.
+*----------------------------------------------------------------------
+  REFRESH IT_LAUFK.
+  X_LAUFK-LAUFK = 'W'.
+  X_LAUFK-SIGN  = 'E'.
+  APPEND X_LAUFK TO IT_LAUFK.
+  CLEAR X_LAUFK.
+  LOOP AT IT_LAUFK INTO X_LAUFK.
+    CALL FUNCTION 'F4_ZAHLLAUF'
+      EXPORTING
+        F1TYP = 'D'
+        F2NME = 'S_ERDAT-LOW'
+      IMPORTING
+        LAUFD = S_ERDAT-LOW
+
+      TABLES
+        LAUFK = IT_LAUFK.
+    IF SY-SUBRC <> 0.
+    ENDIF.
+  ENDLOOP.
+*  CLEAR X_LAUFK.
+
+*----------------------------------------------------------------------
+AT SELECTION-SCREEN.
+*----------------------------------------------------------------------
+*
+*  IF SSCRFIELDS-UCOMM EQ 'BUT1'.
+*    IF ICICI = 'X'.
+*    ELSE.
+*      KOTAK = 'X'.                         "file check
+*    ENDIF.
+*    CLEAR : V_NOENTRIES.
+*    PERFORM FETCH_DETAILS.
+*    IF V_NOENTRIES IS INITIAL OR GV_ALREADY_EX IS NOT INITIAL.
+*
+*    ELSE.
+*      MESSAGE I000(E4) WITH TEXT-017.
+*
+*    ENDIF.
+*
+*  ENDIF.
+*
+
+*----------------------------------------------------------------------
+INITIALIZATION.
+*----------------------------------------------------------------------
+*  W_BUTTON = 'Extract File'.
+*  REFRESH  it_ICICIMAP.
+*  SELECT MANDT KEYREF SAPVALUE BANKVALUE REMARKS
+*    FROM zicici_MAP INTO TABLE  it_ICICIMAP.
+
+*-------------------------------------------------------------------*
+START-OF-SELECTION.
+*-------------------------------------------------------------------*
+*START-OF-SELECTION.
+**----------------------------------------------------------------------
+
+
+  IF ICICI EQ 'X' .
+*X_BNKA-BANKA CS 'ICICI'.
+  ELSEIF
+    KOTAK EQ 'X'.
+* X_BNKA-BANKA CS 'KOTAK'.
+  ENDIF.
+  CLEAR : V_NOENTRIES.
+  PERFORM FETCH_DETAILS.
+  IF V_NOENTRIES IS INITIAL OR GV_ALREADY_EX IS NOT INITIAL.
+*PERFORM DETAILS_CONSTRUCT.
+  ELSE.
+    MESSAGE I000(E4) WITH TEXT-017.
+  ENDIF.
+
+
+
+*  *&---------------------------------------------------------------------*
+*&      Form  FETCH_DETAILS
+*&---------------------------------------------------------------------*
+*       Subroutine for fetching details from Master                    *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+PERFORM get_misdata.
+
+FORM FETCH_DETAILS .
+
+  REFRESH : IT_LFA1,IT_LFB1,  IT_ADRC, IT_ADR6,
+            IT_LFBK, IT_BNKA.
+  CLEAR: GV_BUKRS,GV_LIFNR,IT_LFA1,IT_LFB1, IT_ADRC, IT_ADR6,
+            IT_LFBK, IT_BNKA.
+
+  GV_BUKRS = P_ZBUKR.
+  GV_LIFNR = P_LIFNR.
+
+*******************select log data**************************************************
+
+
+*  SELECT * FROM ZYBLOG INTO TABLE  it_BANKlog.
+*  SELECT SINGLE PERIV FROM T001 INTO GV_PERIV WHERE BUKRS = P_ZBUKR.
+
+      SELECT LIFNR BUKRS ZAHLS ERDAT FROM LFB1
+      INTO TABLE IT_LFB1
+
+      WHERE BUKRS EQ P_ZBUKR and
+            ERDAT in S_ERDAT.
+
+     if sy-subrc = 0.
+
+    SELECT LIFNR LAND1 NAME1 NAME2
+           ORT01 ORT02 PSTLZ STRAS
+           ADRNR MCOD3 DTAWS LNRZA
+    FROM LFA1
+    INTO TABLE IT_LFA1
+    FOR ALL ENTRIES IN It_lfb1
+    WHERE LIFNR EQ IT_lfb1-lifnr.
+    ENDIF.
+
+
+    IF IT_LFA1[] IS NOT INITIAL.
+
+      SELECT ADDRNUMBER CITY1 CITY2 POST_CODE1 STREET
+             HOUSE_NUM1 STR_SUPPL1 STR_SUPPL2 STR_SUPPL3
+             LOCATION COUNTRY REGION TEL_NUMBER
+      APPENDING TABLE IT_ADRC
+      FROM ADRC
+      FOR ALL ENTRIES IN IT_LFA1
+      WHERE ADDRNUMBER EQ IT_LFA1-ADRNR.
+
+      SELECT ADDRNUMBER FLGDEFAULT HOME_FLAG SMTP_ADDR
+      APPENDING TABLE IT_ADR6
+      FROM ADR6
+      FOR ALL ENTRIES IN IT_LFA1
+      WHERE ADDRNUMBER EQ IT_LFA1-ADRNR.
+
+      SELECT LIFNR BANKS BANKL BANKN
+             BKONT BVTYP BKREF KOINH
+      APPENDING TABLE IT_LFBK
+      FROM LFBK
+      FOR ALL ENTRIES IN IT_LFA1
+      WHERE LIFNR EQ IT_LFA1-LIFNR.
+
+      IF IT_LFBK[] IS NOT INITIAL.
+
+        SELECT BANKS BANKL BANKA STRAS
+               ORT01 SWIFT BNKLZ BRNCH
+        APPENDING TABLE IT_BNKA
+        FROM BNKA
+        FOR ALL ENTRIES IN IT_LFBK
+        WHERE BANKS EQ IT_LFBK-BANKS AND
+              BANKL EQ IT_LFBK-BANKL.
+      ENDIF.
+    ENDIF.
+
+ ENDFORM.
+
+
+
+*******************************************************************************************
+
+FORM GET_MISDATA.
+ CLEAR:X_LFA1.
+       LOOP AT IT_LFA1 INTO X_LFA1.
+
+           WA_FILE-zvendor_code = X_LFA1-LIFNR.
+
+       CLEAR :X_LFBK,X_BNKA.
+       READ TABLE IT_LFBK INTO X_LFBK WITH KEY LIFNR = X_LFA1-LIFNR
+
+                                               BANKS = 'IN'.
+
+      READ TABLE IT_BNKA INTO X_BNKA WITH KEY BANKS = X_LFBK-BANKS
+                                                BANKL = X_LFBK-BANKL.
+
+          WA_FILE-ZBENEFICIARY_ACCOUNT_NO  = X_LFBK-BANKN.
+          WA_FILE-zbene_bnk_name = X_BNKA-BANKA.
+          WA_FILE-ZBENEFICIARY_IFSC_CODE = X_LFBK-BKREF.
+          WA_FILE-ZBENEFICIARY_NAME = X_LFBK-KOINH .
+          WA_FILE-ZAMOUNT = '2'.
+
+     CLEAR:X_ADRC,X_ADR6.
+
+     READ TABLE IT_ADRC INTO X_ADRC WITH KEY
+                                      ADDRNUMBER = X_LFA1-ADRNR.
+     READ TABLE IT_ADR6 INTO X_ADR6 WITH KEY
+                                  ADDRNUMBER = X_LFA1-ADRNR
+                                  HOME_FLAG = 'X'.
+     CLEAR : x_adr6_email .
+      READ TABLE IT_ADR6 INTO x_adr6_email
+                                 with key ADDRNUMBER = X_ADRC-ADDRNUMBER.
+
+
+           WA_FILE-ZBENE_ADD_LINE_1 = X_adrc-city1  .
+           WA_FILE-ZBENE_ADD_LINE_2 = X_adrc-post_code1 .
+           WA_FILE-ZBENE_ADD_LINE_3 = X_adrc-STREET.
+           WA_FILE-ZBENE_ADD_LINE_4 = X_adrc-COUNTRY  .
+           WA_FILE-zemailid = x_adr6_email-SMTP_ADDR.
+           WA_FILE-ZCONTACT_NO = X_adrc-tel_number.
+
+     APPEND WA_FILE TO IT_FILE.
+
+    IF SY-SUBRC <> 0.
+    WRITE   'Duplicate Records'.
+    endif.
+    endloop.
+    PERFORM RECORDS_ALV.
+    ENDFORM.
+
+
+
+FORM records_ALV.
+  IF IT_FILE[] IS NOT INITIAL.
+    PERFORM alv_field_catalog.
+    PERFORM alv_layout.
+    PERFORM DISPLAY_DATA.
+    PERFORM top_of_log.
+*    PERFORM top_of_page.
+*     PERFORM build_alv_header.
+    ELSE.
+      Message 'No records found' TYPE 'I'.
+    ENDIF.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*&      Form  top_of_page
+*&---------------------------------------------------------------------*
+FORM top_of_page.
+
+  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+    EXPORTING
+      it_list_commentary = it_listheader.
+
+ENDFORM.                    "top_of_page
+
+
+
+*********************************************************************************************
+
+                  " alv_layout
+
+**&---------------------------------------------------------------------*
+**& Form ALV_FIELD_CATALOG
+**&---------------------------------------------------------------------*
+**& text
+**&---------------------------------------------------------------------*
+**& -->  p1        text
+**& <--  p2        text
+**&---------------------------------------------------------------------*
+FORM ALV_FIELD_CATALOG .
+
+DATA: lv_col TYPE i VALUE 0.
+
+ IF it_FILE IS NOT INITIAL.
+   clear: it_fit.
+
+    wa_fit-col_pos   = '1'.
+    wa_fit-fieldname = 'flag'.
+    wa_fit-tabname   = 'it_file'.
+    wa_fit-seltext_l = 'check'.
+     wa_fit-input  = 'X'.
+     wa_fit-edit  =  'X'.
+     WA_FIT-CHECKBOX = 'X'.
+    wa_fit-outputlen = '30'.
+    APPEND wa_fit TO it_fit.
+    CLEAR wa_fit.
+
+    wa_fit-col_pos   = '2'.
+    wa_fit-fieldname = 'ZBENEFICIARY_IFSC_CODE'.
+    wa_fit-tabname   = 'it_FILE'.
+    wa_fit-seltext_l = 'IFSC CODE'.
+    APPEND wa_fit TO it_fit.
+    CLEAR wa_fit.
+
+    wa_fit-col_pos   = '3'.
+    wa_fit-fieldname = 'ZBENEFICIARY_ACCOUNT_NO'.
+    wa_fit-tabname   = 'it_FILE'.
+    wa_fit-seltext_l = 'CREDIT ACCOUNT NUMBER'.
+    APPEND wa_fit TO it_fit.
+    CLEAR wa_fit.
+
+    wa_fit-col_pos   = '4'.
+    wa_fit-fieldname = 'zbene_bnk_name '.
+    wa_fit-tabname   = 'it_FILE'.
+    wa_fit-seltext_l = 'BANK NAME'.
+    APPEND wa_fit TO it_fit.
+    CLEAR wa_fit.
+
+    wa_fit-col_pos   = '5'.
+    wa_fit-fieldname = 'zvendor_code'.
+    wa_fit-tabname   = 'it_FILE'.
+    wa_fit-seltext_l = 'VENDOR CODE'.
+    APPEND wa_fit TO it_fit.
+    CLEAR wa_fit.
+
+    wa_fit-col_pos   = '6'.
+    wa_fit-fieldname = 'ZBENEFICIARY_NAME '.
+    wa_fit-tabname   = 'it_FILE'.
+    wa_fit-seltext_l = 'VENDOR NAME'.
+    APPEND wa_fit TO it_fit.
+    CLEAR wa_fit.
+
+    wa_fit-col_pos   = '7'.
+    wa_fit-fieldname = 'ZBENE_ADD_LINE_1 '.
+    wa_fit-tabname   = 'it_FILE'.
+    wa_fit-seltext_l = 'ADDRESS1'.
+    wa_fit-outputlen = '30'.
+    APPEND wa_fit TO it_fit.
+    CLEAR wa_fit.
+
+    wa_fit-col_pos   = '8'.
+    wa_fit-fieldname = 'ZBENE_ADD_LINE_2 '.
+    wa_fit-tabname   = 'it_FILE'.
+    wa_fit-seltext_l = 'ADDRESS2'.
+    APPEND wa_fit TO it_fit.
+    CLEAR wa_fit.
+
+    wa_fit-col_pos   = '9'.
+    wa_fit-fieldname = 'ZBENE_ADD_LINE_3  '.
+    wa_fit-tabname   = 'it_FILE'.
+    wa_fit-seltext_l = 'ADDRESS3'.
+    APPEND wa_fit TO it_fit.
+    CLEAR wa_fit.
+
+    wa_fit-col_pos   = '10'.
+    wa_fit-fieldname = 'ZBENE_ADD_LINE_4 '.
+    wa_fit-tabname   = 'it_FILE'.
+    wa_fit-seltext_l = 'ADDRESS4'.
+    APPEND wa_fit TO it_fit.
+    CLEAR wa_fit.
+
+    wa_fit-col_pos   = '11'.
+    wa_fit-fieldname = 'ZAMOUNT '.
+    wa_fit-tabname   = 'it_FILE'.
+    wa_fit-seltext_l = 'AMOUNT'.
+    wa_fit-do_sum    =   ' X '   .
+    APPEND wa_fit TO it_fit.
+    CLEAR wa_fit.
+
+
+    wa_fit-col_pos   = '12'.
+    wa_fit-fieldname = 'zcurrency '.
+    wa_fit-tabname   = 'it_FILE'.
+    wa_fit-seltext_l = 'CURRENCY'.
+    APPEND wa_fit TO it_fit.
+    CLEAR wa_fit.
+
+    wa_fit-col_pos   = '13'.
+    wa_fit-fieldname = 'zemailid '.
+    wa_fit-tabname   = 'it_FILE'.
+    wa_fit-seltext_l = 'EMAIL ID'.
+    APPEND wa_fit TO it_fit.
+    CLEAR wa_fit.
+
+    wa_fit-col_pos   = '14'.
+    wa_fit-fieldname = 'ZCONTACT_NO'.
+    wa_fit-tabname   = 'it_icici'.
+    wa_fit-seltext_l = 'CONTACTNO'.
+    APPEND wa_fit TO it_fit.
+    CLEAR wa_fit.
+  gd_layout-colwidth_optimize = 'X'.
+
+   ENDIF.
+
+ENDFORM.
+
+
+
+*&---------------------------------------------------------------------*
+*&      Form  alv_layout
+*&---------------------------------------------------------------------*
+*       Preparing the ALV Layout
+*----------------------------------------------------------------------*
+FORM alv_layout .
+
+  wa_layout-zebra = 'X'.
+  wa_layout-colwidth_optimize = 'X'.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*& Form TOP_OF_LOG
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM TOP_OF_LOG .
+
+REFRESH it_top.
+
+  wa_top-typ  = 'H'.
+  wa_top-info = 'penny drop'.
+  APPEND wa_top TO it_top.
+  CLEAR wa_top.
+
+  wa_top-typ  = 'S'.
+  wa_top-info = 'Report: '.
+  CONCATENATE wa_top-info sy-repid INTO wa_top-info.
+  "Concatenating the text info with program name
+  APPEND wa_top TO it_top.
+  CLEAR wa_top.
+
+  wa_top-typ  = 'S'.
+  wa_top-info = 'SAP ALV Report'.
+  CONCATENATE wa_top-info sy-uname INTO wa_top-info.
+  "Concatenating the text info with user name
+  APPEND wa_top TO it_top.
+  CLEAR wa_top.
+*ENDFORM.
+
+CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+  EXPORTING
+    it_LIST_COMMENTARY       = it_top
+*    I_LOGO                  =
+*   I_END_OF_LIST_GRID       =
+    I_ALV_FORM               = 'X' .
+ENDFORM.
+
+**&---------------------------------------------------------------------*
+**& Form DISPLAY_DATA
+**&---------------------------------------------------------------------*
+**& text
+**&---------------------------------------------------------------------*
+**& -->  p1        text
+**& <--  p2        text
+**&---------------------------------------------------------------------*
+*
+ FORM DISPLAY_DATA.
+
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+   EXPORTING
+
+    I_CALLBACK_PROGRAM                = sy-repid
+   I_CALLBACK_PF_STATUS_SET          = 'PF_STATUS_SET'
+   I_CALLBACK_USER_COMMAND           = 'USER_COMMAND '
+    I_CALLBACK_TOP_OF_PAGE            ='TOP_OF_LOG'
+   I_GRID_TITLE                      = 'LIST OF VENDORS FOR PENDROP '
+
+    IS_LAYOUT                         = wa_layout
+    IT_FIELDCAT                       = it_fit
+
+   TABLES
+    T_OUTTAB                          = it_FILE
+  EXCEPTIONS
+   PROGRAM_ERROR                     = 1
+   OTHERS                            = 2 .
+
+ENDFORM.
+
+
+FORM PF_STATUS_SET USING rt_extab TYPE slis_t_extab.        "#EC CALLED
+
+  SET PF-STATUS 'ZSTANDARD1' .
+
+ENDFORM.
+
+FORM user_command USING r_ucomm    LIKE sy-ucomm
+                       rs_selfield TYPE slis_selfield.
+
+
+  IF r_ucomm EQ '&EXEC'.
+
+MESSAGE 'EXEC button is clicked.' TYPE 'S'.
+
+
+
+***************************************************************************************************
+CLEAR :WA_FILE1,IT_FILE1.
+
+  IT_FILE1[] = IT_FILE[].
+
+
+
+ concatenate
+   'Vendor_code  ' 'bene_bnk_ name' 'BENEFICIARY_ACCOUNT_NO'
+   'BENEFICIARY_IFSC_CODE' 'BENEFICIARY_NAME '
+    'ZBENE_ADD_LINE_1 ''ZBENE_ADD_LINE_2  ''ZBENE_ADD_LINE_2 '
+    'ZBENE_ADD_LINE_4 ' 'AMOUNT  ''currency ''Beneficiary_zemailid '
+    'CONTACT_NO '
+
+  into ch_str3 separated by '|'.
+ APPEND ch_str3 to it_pfile.
+
+
+LOOP AT IT_FILE1 INTO WA_FILE1.
+
+CONCATENATE 'P' wa_file1-zvendor_code  wa_file1-zbene_bnk_name wa_file1-zBENEFICIARY_ACCOUNT_NO WA_FILE1-ZBENEFICIARY_IFSC_CODE  WA_FILE1-zBENEFICIARY_NAME
+WA_FILE1-ZBENE_ADD_LINE_1   WA_FILE1-ZBENE_ADD_LINE_2  WA_FILE1-ZBENE_ADD_LINE_3  WA_FILE1-ZBENE_ADD_LINE_4  WA_FILE1-zAMOUNT WA_FILE1-zcurrency WA_FILE1-zemailid  WA_FILE1-zCONTACT_NO
+
+into ch_str3 SEPARATED BY '|'.
+
+append ch_str3 to it_pfile.
+
+ENDLOOP.
+
+SELECT SINGLE REMARKS FROM zicici_MAP INTO ZPAY_PATH WHERE KEYREF = 'PAY_FILE'.
+*SELECT SINGLE REMARKS FROM zicici_MAP INTO ZBACK_PATH WHERE KEYREF = 'BACK_FILE'.
+
+C_PFILE = ZPAY_PATH.
+*P_file = ZBACK_PATH.
+
+ C_PFILE = 'D:\usr\sap\Z07\DVEBMGS31\work\' .
+
+CONCATENATE zpay_path DEBIT_ACCNO '_' sy-datum+6(2) sy-datum+4(2) sy-datum(4) '_' '.txt' into zfilename.
+CONCATENATE C_PFILE ZFILENAME INTO C_PFILE.
+
+ OPEN DATASET C_PFILE FOR OUTPUT IN TEXT MODE ENCODING DEFAULT .
+   DESCRIBE TABLE IT_PFILE LINES LV_LINES.
+
+   LOOP AT IT_PFILE.
+     IF SY-TABIX LE LV_LINES.
+        TRANSFER IT_PFILE TO C_PFILE.
+     ENDIF.
+   ENDLOOP.
+*   ENDCASE.
+   CLOSE DATASET C_PFILE.
+ENDIF.
+ ENDFORM.
